@@ -2,8 +2,9 @@
 {
     public enum GameStatus
     {
-        InProgress = 0,
-        Finished = 1,
-        Canceled = 2
+        WaitingForOpponent = 0,
+        InProgress = 1,
+        Finished = 2,
+        Canceled = 3
     }
 }

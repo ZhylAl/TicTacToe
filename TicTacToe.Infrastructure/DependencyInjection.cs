@@ -28,7 +28,7 @@ namespace TicTacToe.Infrastructure
 
             var databaseSettings = configuration.GetSection(DatabaseSettings.SectionName).Get<DatabaseSettings>();
             services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseNpgsql(databaseSettings.DefaultConnection));
+                options.UseNpgsql(databaseSettings!.DefaultConnection));
 
             var jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>();
             services.AddAuthentication(options =>
@@ -44,11 +44,12 @@ namespace TicTacToe.Infrastructure
                         ValidateAudience = false,
                         ValidateLifetime = true,
                         ValidateIssuerSigningKey = true,
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Key))
+                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings!.Key))
                     };
                 });
 
             services.AddScoped<IJwtProvider, JwtProvider>();
+            services.AddScoped<IGameService, GameService>();
 
             return services;
         }

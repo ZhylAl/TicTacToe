@@ -48,7 +48,7 @@ namespace TicTacToe.UnitTests
             var game = CreateTestGame();
             game.CurrentTurn = CellState.O;
 
-            var result = _engine.MakeMove(game, game.PlayerOId, 4);
+            var result = _engine.MakeMove(game, game.PlayerOId!.Value, 4);
 
             Assert.True(result.IsSuccess);
             Assert.Equal(CellState.O, game.Board[4]);
@@ -80,7 +80,7 @@ namespace TicTacToe.UnitTests
         public void MakeMove_NotPlayersTurn_ShouldReturnFailure()
         {
             var game = CreateTestGame();
-            var result = _engine.MakeMove(game, game.PlayerOId, 0); // O's move on X's turn
+            var result = _engine.MakeMove(game, game.PlayerOId!.Value, 0); // O's move on X's turn
 
             Assert.False(result.IsSuccess);
             Assert.Equal("It's not the player's turn.", result.ErrorMessage);
@@ -161,7 +161,7 @@ namespace TicTacToe.UnitTests
             game.Board[4] = CellState.O;
             // O is about to play at 7 (Middle column: 1, 4, 7)
 
-            var result = _engine.MakeMove(game, game.PlayerOId, 7);
+            var result = _engine.MakeMove(game, game.PlayerOId!.Value, 7);
 
             Assert.True(result.IsSuccess);
             Assert.Equal(GameStatus.Finished, game.Status);
@@ -194,7 +194,7 @@ namespace TicTacToe.UnitTests
             game.Board[4] = CellState.O;
             // O is about to play at 6 (Diagonal: 2, 4, 6)
 
-            var result = _engine.MakeMove(game, game.PlayerOId, 6);
+            var result = _engine.MakeMove(game, game.PlayerOId!.Value, 6);
 
             Assert.True(result.IsSuccess);
             Assert.Equal(GameStatus.Finished, game.Status);

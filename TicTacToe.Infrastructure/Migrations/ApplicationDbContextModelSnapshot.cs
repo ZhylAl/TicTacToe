@@ -174,7 +174,7 @@ namespace TicTacToe.Infrastructure.Migrations
                     b.Property<DateTime>("LastUpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("PlayerOId")
+                    b.Property<Guid?>("PlayerOId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("PlayerXId")

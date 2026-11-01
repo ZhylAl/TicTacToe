@@ -1,9 +1,10 @@
-using System.Net.Http.Json;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using System.Net.Http.Json;
 using TicTacToe.Application.DTOs;
+using TicTacToe.Application.Interfaces;
 using TicTacToe.Core.Enums;
 using TicTacToe.Infrastructure.Data;
 using TicTacToe.IntegrationTests.Infrastructure;
@@ -183,6 +184,43 @@ namespace TicTacToe.IntegrationTests.Api
 
             Assert.Equal(GameStatus.Finished, savedGame!.Status);
             Assert.Null(savedGame.WinnerId);
+        }
+
+        [Fact]
+        public async Task GetRecentGamesAsync_ShouldReturnGamesWithCorrectPlayerNames()
+        {
+            // Arrange: Register two players in the database
+            var playerXName = $"PlayerX_{Guid.NewGuid():N}";
+            var playerOName = $"PlayerO_{Guid.NewGuid():N}";
+
+            var tokenX = await RegisterAndLoginAsync(playerXName);
+            var tokenO = await RegisterAndLoginAsync(playerOName);
+
+            // Create game via API
+            _client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokenX);
+
+            var createResponse = await _client.PostAsync("/api/game/create", null);
+            var createdGame = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+
+            // Player O joins via SignalR hub
+            var connectionO = await CreateHubConnectionAsync(tokenO);
+            await connectionO.InvokeAsync("JoinGame", createdGame!.Id);
+
+            // Act: Request recent games history from IGameService
+            using var scope = _factory.Services.CreateScope();
+            var gameService = scope.ServiceProvider.GetRequiredService<IGameService>();
+
+            var recentGames = await gameService.GetRecentGamesAsync(10, CancellationToken.None);
+
+            // Assert: Game must be present with resolved player usernames
+            Assert.NotEmpty(recentGames);
+
+            var gameInHistory = recentGames.FirstOrDefault(g => g.Id == createdGame.Id);
+            Assert.NotNull(gameInHistory);
+            Assert.Equal(playerXName, gameInHistory.PlayerXName);
+            Assert.Equal(playerOName, gameInHistory.PlayerOName);
+            Assert.Equal(GameStatus.InProgress.ToString(), gameInHistory.Status);
         }
     }
 }

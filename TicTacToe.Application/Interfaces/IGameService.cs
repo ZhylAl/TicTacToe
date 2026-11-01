@@ -8,5 +8,6 @@ namespace TicTacToe.Application.Interfaces
         Task<GameResponse?> GetGameAsync(Guid gameId, CancellationToken cancellationToken);
         Task<GameResponse> JoinGameAsync(Guid gameId, Guid playerOId, CancellationToken cancellationToken);
         Task<GameResponse> MakeMoveAsync(Guid gameId, Guid playerId, int position, CancellationToken cancellationToken);
+        Task<IReadOnlyList<GameHistoryItemResponse>> GetRecentGamesAsync(int count, CancellationToken cancellationToken);
     }
 }

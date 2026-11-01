@@ -121,5 +121,58 @@ namespace TicTacToe.Infrastructure.Services
                 WinnerId: game.WinnerId
             );
         }
+
+        public async Task<IReadOnlyList<GameHistoryItemResponse>> GetRecentGamesAsync(int count, CancellationToken cancellationToken)
+        {
+            var games = await _context.Games
+                .OrderByDescending(g => g.CreatedAt)
+                .Take(count)
+                .ToListAsync(cancellationToken);
+
+            if (games.Count == 0)
+            {
+                return Array.Empty<GameHistoryItemResponse>();
+            }
+
+            var userIds = games
+                .Select(g => g.PlayerXId)
+                .Concat(games.Where(g => g.PlayerOId.HasValue).Select(g => g.PlayerOId!.Value))
+                .Distinct() 
+                .ToList();
+
+            var users = await _context.Users
+                .Where(u => userIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.UserName ?? "Unknown", cancellationToken);
+
+            return games.Select(g =>
+            {
+                var playerX = users.GetValueOrDefault(g.PlayerXId, "Unknown");
+                var playerO = g.PlayerOId.HasValue ? users.GetValueOrDefault(g.PlayerOId.Value, "Unknown") : "Waiting...";
+
+                string result;
+                if (g.WinnerId.HasValue)
+                {
+                    var winnerName = users.GetValueOrDefault(g.WinnerId.Value, "Unknown");
+                    result = $"{winnerName} won";
+                }
+                else if (g.Status == GameStatus.Finished)
+                {
+                    result = "Draw";
+                }
+                else
+                {
+                    result = g.Status.ToString();
+                }
+
+                return new GameHistoryItemResponse(
+                    g.Id,
+                    playerX,
+                    playerO,
+                    g.Status.ToString(),
+                    result,
+                    g.CreatedAt
+                );
+            }).ToList();
+        }
     }
 }

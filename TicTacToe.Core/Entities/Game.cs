@@ -6,7 +6,7 @@ namespace TicTacToe.Core.Entities
     {
         public Guid Id { get; set; } = Guid.NewGuid();
         public Guid PlayerXId { get; set; }
-        public Guid PlayerOId { get; set; }
+        public Guid? PlayerOId { get; set; }
         public CellState[] Board { get; set; } = new CellState[9];
         public CellState CurrentTurn { get; set; } = CellState.X;
         public GameStatus Status { get; set; }

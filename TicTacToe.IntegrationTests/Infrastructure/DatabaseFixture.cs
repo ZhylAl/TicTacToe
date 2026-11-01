@@ -8,8 +8,7 @@ namespace TicTacToe.IntegrationTests.Infrastructure
 
         public DatabaseFixture()
         {
-            _postgreSqlContainer = new PostgreSqlBuilder()
-                .WithImage("postgres:15-alpine")
+            _postgreSqlContainer = new PostgreSqlBuilder("postgres:15-alpine")
                 .WithDatabase("tictactoe_test")
                 .WithUsername("test_user")
                 .WithPassword("test_password")

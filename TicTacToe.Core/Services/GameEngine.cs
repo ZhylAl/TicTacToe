@@ -22,7 +22,7 @@ namespace TicTacToe.Core.Services
         public MoveResult MakeMove(Game game, Guid playerId, int position)
         {
             // Validation
-            if (game.Status != GameStatus.InProgress)
+            if (game.Status != GameStatus.InProgress || game.PlayerOId == null)
                 return MoveResult.Failure("Game is not in progress.");
 
             if (position < 0 || position > 8)
@@ -34,7 +34,7 @@ namespace TicTacToe.Core.Services
             if (playerId != game.PlayerXId && playerId != game.PlayerOId)
                 return MoveResult.Failure("Player is not part of this game.");
 
-            Guid currentPlayerId = game.CurrentTurn == CellState.X ? game.PlayerXId : game.PlayerOId;
+            Guid currentPlayerId = game.CurrentTurn == CellState.X ? game.PlayerXId : game.PlayerOId.Value;
             if (currentPlayerId != playerId)
                 return MoveResult.Failure("It's not the player's turn.");
 

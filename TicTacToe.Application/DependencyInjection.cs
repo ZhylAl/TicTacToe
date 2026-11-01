@@ -9,6 +9,7 @@ namespace TicTacToe.Application
         public static IServiceCollection AddApplicationServices(this IServiceCollection services)
         {
             services.AddScoped<IGameEngine, GameEngine>();
+            services.AddScoped<IBotPlayer, BotPlayer>();
 
             return services;
         }

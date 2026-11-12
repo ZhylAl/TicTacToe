@@ -1,4 +1,4 @@
-﻿using TicTacToe.Application.DTOs;
+﻿using TicTacToe.Contracts.DTO;
 
 namespace TicTacToe.Application.Interfaces
 {

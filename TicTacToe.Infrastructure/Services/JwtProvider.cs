@@ -37,7 +37,6 @@ namespace TicTacToe.Infrastructure.Services
                 signingCredentials: creds
             );
 
-
             var jwtToken = new JwtSecurityTokenHandler().WriteToken(token);
             return jwtToken;
         }

@@ -162,6 +162,9 @@ namespace TicTacToe.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int?>("BotDifficulty")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -173,6 +176,9 @@ namespace TicTacToe.Infrastructure.Migrations
 
                     b.Property<DateTime>("LastUpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Mode")
+                        .HasColumnType("integer");
 
                     b.Property<Guid?>("PlayerOId")
                         .HasColumnType("uuid");

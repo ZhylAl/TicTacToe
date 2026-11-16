@@ -7,12 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\TicTacToe.Contracts\TicTacToe.Contracts.csproj" />
-    <ProjectReference Include="..\TicTacToe.Core\TicTacToe.Core.csproj" />
+    <Compile Remove="Services\**" />
+    <EmbeddedResource Remove="Services\**" />
+    <None Remove="Services\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Services\" />
+    <ProjectReference Include="..\TicTacToe.Contracts\TicTacToe.Contracts.csproj" />
+    <ProjectReference Include="..\TicTacToe.Core\TicTacToe.Core.csproj" />
   </ItemGroup>
 
 </Project>

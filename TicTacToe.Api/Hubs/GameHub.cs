@@ -1,10 +1,12 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using TicTacToe.Application.Interfaces;
+using ContractEnums = TicTacToe.Contracts.Enums;
 
 namespace TicTacToe.Api.Hubs
 {
-    [Authorize]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public class GameHub : Hub
     {
         private readonly IGameService _gameService;
@@ -48,6 +50,16 @@ namespace TicTacToe.Api.Hubs
 
                 await Groups.AddToGroupAsync(Context.ConnectionId, gameId.ToString());
                 await Clients.Group(gameId.ToString()).SendAsync("GameUpdated", gameResponse);
+
+                if (gameResponse.Status == ContractEnums.GameStatus.InProgress)
+                {
+                    var botResponse = await _gameService.MakeBotMoveAsync(gameId, CancellationToken.None);
+                    if (botResponse != null)
+                    {
+                        await Task.Delay(400); 
+                        await Clients.Group(gameId.ToString()).SendAsync("GameUpdated", botResponse);
+                    }
+                }
             }
             catch (Exception ex)
             {

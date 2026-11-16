@@ -1,165 +1,139 @@
 ﻿using Spectre.Console;
 using System;
-using System.Threading;
 using System.Threading.Tasks;
-using TicTacToe.Application.Interfaces;
 using TicTacToe.ConsoleUI.UI;
-using TicTacToe.Core.Entities;
-using TicTacToe.Core.Enums;
-using TicTacToe.Core.Interfaces;
+using TicTacToe.Contracts.DTO;
+using TicTacToe.Contracts.Enums;
 
-namespace TicTacToe.ConsoleUI.Services;
-
-public class ConsoleGameLoop
+namespace TicTacToe.ConsoleUI.Services
 {
-    private readonly IGameService _gameService;
-    private readonly PlayerManager _playerManager;
-    private readonly IBotPlayer _botPlayer;
-
-    public ConsoleGameLoop(
-        IGameService gameService,
-        PlayerManager playerManager,
-        IBotPlayer botPlayer)
+    public class ConsoleGameLoop
     {
-        _gameService = gameService;
-        _playerManager = playerManager;
-        _botPlayer = botPlayer;
-    }
+        private readonly ApiClient _apiClient;
+        private readonly GameHubClient _hubClient;
+        private TaskCompletionSource<GameResponse>? _turnTcs;
+        private GameResponse? _currentGame;
 
-    public Task PlayWithFriendAsync(CancellationToken cancellationToken = default)
-    => RunGameAsync(vsBot: false, cancellationToken);
-    public Task PlayVsBotAsync(CancellationToken cancellationToken = default)
-        => RunGameAsync(vsBot: true, cancellationToken);
-
-    private async Task RunGameAsync(bool vsBot, CancellationToken cancellationToken = default)
-    {
-        AnsiConsole.Clear();
-        AnsiConsole.Write(new Rule("[yellow]Game Setup[/]").LeftJustified());
-
-        // 1. Setup Player X (Human)
-        AnsiConsole.MarkupLine("[bold cyan]Player X setup:[/]");
-        var playerX = await PromptPlayerAsync("Player X");
-        AnsiConsole.WriteLine();
-
-        // 2. Setup Player O (Human or Bot)
-        User playerO;
-        BotDifficulty difficulty = BotDifficulty.Easy;
-
-        if (vsBot)
+        public ConsoleGameLoop(ApiClient apiClient, GameHubClient hubClient)
         {
-            difficulty = AnsiConsole.Prompt(
+            _apiClient = apiClient;
+            _hubClient = hubClient;
+
+            _hubClient.OnGameUpdated += (updatedGame) =>
+            {
+                _currentGame = updatedGame;
+                _turnTcs?.TrySetResult(updatedGame);
+            };
+        }
+
+        public async Task PlayWithFriendAsync()
+        {
+            AnsiConsole.Clear();
+            AnsiConsole.Write(new Rule("[yellow]Hot-Seat Setup[/]").LeftJustified());
+
+            var playerXName = _apiClient.CurrentUsername ?? "Player X";
+            var playerOName = AnsiConsole.Prompt(
+                new TextPrompt<string>("Enter [bold yellow]Player O[/] nickname:")
+                    .DefaultValue("Friend"));
+
+            var game = await _apiClient.CreateGameAsync(new CreateGameRequest(GameMode.HotSeat));
+
+            await _hubClient.WaitForGameAsync(game.Id);
+
+            await RunGameLoopAsync(game, playerXName, playerOName, isVsBot: false);
+        }
+
+        public async Task PlayVsBotAsync()
+        {
+            AnsiConsole.Clear();
+            AnsiConsole.Write(new Rule("[yellow]Bot Match Setup[/]").LeftJustified());
+
+            var difficulty = AnsiConsole.Prompt(
                 new SelectionPrompt<BotDifficulty>()
                     .Title("Choose [yellow]Bot Difficulty[/]:")
                     .AddChoices(BotDifficulty.Easy, BotDifficulty.Medium, BotDifficulty.Hard));
 
-            var botName = $"Bot{difficulty}";
-            playerO = await _playerManager.GetOrCreatePlayerAsync(botName);
-            AnsiConsole.MarkupLine($"Playing against [bold yellow]{playerO.UserName}[/]!");
+            var playerXName = _apiClient.CurrentUsername ?? "Player";
+            var playerOName = $"Bot ({difficulty})";
+
+            var game = await _apiClient.CreateGameAsync(new CreateGameRequest(GameMode.VsBot, difficulty));
+
+            await _hubClient.WaitForGameAsync(game.Id);
+
+            await RunGameLoopAsync(game, playerXName, playerOName, isVsBot: true);
         }
-        else
+
+        private async Task RunGameLoopAsync(GameResponse initialGame, string playerXName, string playerOName, bool isVsBot)
         {
-            AnsiConsole.MarkupLine("[bold yellow]Player O setup:[/]");
-            playerO = await PromptPlayerAsync("Player O", forbiddenName: playerX.UserName);
-        }
+            _currentGame = initialGame;
 
-        AnsiConsole.MarkupLine("\n[grey]Creating game in database...[/]");
+            while (_currentGame.Status == GameStatus.InProgress)
+            {
+                AnsiConsole.Clear();
+                AnsiConsole.Write(new Rule("[cyan]Tic-Tac-Toe Match[/]").RuleStyle("grey"));
+                AnsiConsole.MarkupLine($"[bold cyan]{playerXName} (X)[/]  vs  [bold yellow]{playerOName} (O)[/]\n");
 
-        // 3. Create game and join Player O
-        var game = await _gameService.CreateGameAsync(playerX.Id, cancellationToken);
-        game = await _gameService.JoinGameAsync(game.Id, playerO.Id, cancellationToken);
+                BoardRenderer.Render(_currentGame.Board);
+                AnsiConsole.WriteLine();
 
-        // 4. Main turn loop
-        while (game.Status == GameStatus.InProgress)
-        {
+                var isXTurn = _currentGame.CurrentTurn == CellState.X;
+                var currentName = isXTurn ? $"[bold cyan]{playerXName}[/]" : $"[bold yellow]{playerOName}[/]";
+                var currentSymbol = isXTurn ? "[bold cyan]X[/]" : "[bold yellow]O[/]";
+
+                if (isXTurn || !isVsBot)
+                {
+                    var cell = AnsiConsole.Prompt(
+                        new TextPrompt<int>($"Turn: {currentName} ({currentSymbol}). Choose cell [grey](1-9)[/]:")
+                            .Validate(num =>
+                            {
+                                if (num is < 1 or > 9)
+                                    return ValidationResult.Error("[red]Position must be between 1 and 9.[/]");
+
+                                if (_currentGame.Board[num - 1] != CellState.Empty)
+                                    return ValidationResult.Error("[red]Cell is already occupied![/]");
+
+                                return ValidationResult.Success();
+                            }));
+
+                    _turnTcs = new TaskCompletionSource<GameResponse>();
+
+                    await _hubClient.MakeMoveAsync(_currentGame.Id, cell - 1);
+
+                    await _turnTcs.Task;
+                }
+                else
+                {
+                    await AnsiConsole.Status()
+                        .Spinner(Spinner.Known.Dots)
+                        .StartAsync($"[yellow]{playerOName} is thinking...[/]", async _ =>
+                        {
+                            _turnTcs = new TaskCompletionSource<GameResponse>();
+                            await _turnTcs.Task;
+                        });
+                }
+            }
+
             AnsiConsole.Clear();
-
-            // Header
             AnsiConsole.Write(new Rule("[cyan]Tic-Tac-Toe Match[/]").RuleStyle("grey"));
-            AnsiConsole.MarkupLine(
-                $"[bold cyan]{playerX.UserName} (X)[/]  vs  [bold yellow]{playerO.UserName} (O)[/]\n");
-
-            // Board
-            BoardRenderer.Render(game.Board);
+            AnsiConsole.MarkupLine($"[bold cyan]{playerXName} (X)[/]  vs  [bold yellow]{playerOName} (O)[/]\n");
+            BoardRenderer.Render(_currentGame.Board);
+            AnsiConsole.Write(new Rule("[green]Game Over[/]").RuleStyle("green"));
             AnsiConsole.WriteLine();
 
-            var isXTurn = game.CurrentTurn == CellState.X;
-            var currentUserId = isXTurn ? playerX.Id : playerO.Id;
-            var currentUserName = isXTurn ? $"[bold cyan]{playerX.UserName}[/]" : $"[bold yellow]{playerO.UserName}[/]";
-            var currentSymbol = isXTurn ? "[bold cyan]X[/]" : "[bold yellow]O[/]";
-
-            int boardPosition;
-
-            // Humans turn
-            if (isXTurn || !vsBot)
+            if (_currentGame.WinnerId != null)
             {
-                var positionNumber = AnsiConsole.Prompt(
-                    new TextPrompt<int>($"Turn: {currentUserName} ({currentSymbol}). Choose cell [grey](1-9)[/]:")
-                            .Validate(num =>
-                        {
-                            if (num is < 1 or > 9)
-                                return ValidationResult.Error("[red]Position must be between 1 and 9.[/]");
-
-                            if (game.Board[num - 1] != CellState.Empty)
-                                return ValidationResult.Error("[red]Cell is already occupied! Choose another.[/]");
-
-                            return ValidationResult.Success();
-                        }));
-
-                boardPosition = positionNumber - 1;
+                var winnerName = _currentGame.WinnerId == _currentGame.PlayerXId ? playerXName : playerOName;
+                var winnerColor = _currentGame.WinnerId == _currentGame.PlayerXId ? "cyan" : "yellow";
+                AnsiConsole.MarkupLine($"[bold green]🏆 Winner: [{winnerColor}]{winnerName}[/]! Congratulations! 🏆[/]\n");
             }
             else
             {
-                // Bot
-                AnsiConsole.MarkupLine($"[grey]{playerO.UserName} is thinking...[/]");
-                await Task.Delay(500, cancellationToken); // slight delay for natural feeling
-
-                boardPosition = _botPlayer.GetMove(game.Board, CellState.O, difficulty);
+                AnsiConsole.MarkupLine("[bold yellow]🤝 It's a Draw! Well played both! 🤝[/]\n");
             }
 
-            // Apply move
-            game = await _gameService.MakeMoveAsync(game.Id, currentUserId, boardPosition, cancellationToken);
+            AnsiConsole.MarkupLine($"[grey]Game ID: {_currentGame.Id}[/]");
+            AnsiConsole.MarkupLine("Press [yellow]any key[/] to return to menu...");
+            Console.ReadKey(true);
         }
-
-        // 5. Game finished
-        AnsiConsole.Clear();
-        AnsiConsole.Write(new Rule("[cyan]Tic-Tac-Toe Match[/]").RuleStyle("grey"));
-        AnsiConsole.MarkupLine(
-            $"[bold cyan]{playerX.UserName} (X)[/]  vs  [bold yellow]{playerO.UserName} (O)[/]\n");
-        BoardRenderer.Render(game.Board);
-        AnsiConsole.Write(new Rule("[green]Game Over[/]").RuleStyle("green"));
-        AnsiConsole.WriteLine();
-
-        if (game.WinnerId != null)
-        {
-            var winnerName = game.WinnerId == playerX.Id ? playerX.UserName : playerO.UserName;
-            var winnerColor = game.WinnerId == playerX.Id ? "cyan" : "yellow";
-            AnsiConsole.MarkupLine($"[bold green]🏆 Winner: [{winnerColor}]{winnerName}[/]! Congratulations! 🏆[/]\n");
-        }
-        else
-        {
-            AnsiConsole.MarkupLine("[bold yellow]🤝 It's a Draw! Well played both! 🤝[/]\n");
-        }
-
-        AnsiConsole.MarkupLine($"[grey]Saved to database. Game ID: {game.Id}[/]");
-        AnsiConsole.MarkupLine("Press [yellow]any key[/] to return to menu...");
-        Console.ReadKey(true);
-    }
-
-    private async Task<User> PromptPlayerAsync(string playerLabel, string? forbiddenName = null)
-    {
-        var username = AnsiConsole.Prompt(
-            new TextPrompt<string>($"[bold yellow]{playerLabel}[/] Enter nickname:")
-                .Validate(name =>
-                {
-                    if (string.IsNullOrWhiteSpace(name))
-                        return ValidationResult.Error("[red]Nickname cannot be empty.[/]");
-
-                    if (forbiddenName != null && name.Equals(forbiddenName, StringComparison.OrdinalIgnoreCase))
-                        return ValidationResult.Error("[red]Player O must have a different nickname than Player X![/]");
-
-                    return ValidationResult.Success();
-                }));
-
-        return await _playerManager.GetOrCreatePlayerAsync(username);
     }
 }

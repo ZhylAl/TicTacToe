@@ -30,13 +30,22 @@ namespace TicTacToe.Core.Services
 
             if (game.Board[position] != CellState.Empty)
                 return MoveResult.Failure("Cell is already occupied.");
-            
-            if (playerId != game.PlayerXId && playerId != game.PlayerOId)
-                return MoveResult.Failure("Player is not part of this game.");
 
-            Guid currentPlayerId = game.CurrentTurn == CellState.X ? game.PlayerXId : game.PlayerOId.Value;
-            if (currentPlayerId != playerId)
-                return MoveResult.Failure("It's not the player's turn.");
+            if (game.Mode == GameMode.HotSeat)
+            {
+                // In HotSeat mode, only the game creator (PlayerX) can make moves
+                if (playerId != game.PlayerXId)
+                    return MoveResult.Failure("Only the game creator can make moves in HotSeat mode.");
+            }
+            else
+            {
+                // In normal online mode (PvP or vs Bot):
+                if (playerId != game.PlayerXId && playerId != game.PlayerOId)
+                    return MoveResult.Failure("Player is not part of this game.");
+                Guid currentPlayerId = game.CurrentTurn == CellState.X ? game.PlayerXId : game.PlayerOId.Value;
+                if (currentPlayerId != playerId)
+                    return MoveResult.Failure("It's not the player's turn.");
+            }
 
             // Make the move
             game.Board[position] = game.CurrentTurn;
@@ -45,10 +54,12 @@ namespace TicTacToe.Core.Services
             // Check for a win or draw
             if (CheckWin(game.Board, game.CurrentTurn))
             {
-                game.WinnerId = playerId;
+                Guid winnerId = game.CurrentTurn == CellState.X ? game.PlayerXId : game.PlayerOId.Value;
+
+                game.WinnerId = winnerId;
                 game.FinishedAt = DateTime.UtcNow;
                 game.Status = GameStatus.Finished;
-                return MoveResult.Success(true,playerId);
+                return MoveResult.Success(true, winnerId);
             }
             
             if (game.Board.All(cell => cell != CellState.Empty))

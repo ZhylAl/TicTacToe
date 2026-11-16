@@ -3,9 +3,9 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http.Json;
-using TicTacToe.Application.DTOs;
+using TicTacToe.Contracts.DTO;
 using TicTacToe.Application.Interfaces;
-using TicTacToe.Core.Enums;
+using TicTacToe.Contracts.Enums;
 using TicTacToe.Infrastructure.Data;
 using TicTacToe.IntegrationTests.Infrastructure;
 
@@ -72,7 +72,7 @@ namespace TicTacToe.IntegrationTests.Api
             
             _client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokenX);
             
-            var createGameResponse = await _client.PostAsync("/api/game/create", null);
+            var createGameResponse = await _client.PostAsJsonAsync("/api/game/create", new CreateGameRequest(GameMode.PvpOnline));
             var game = await createGameResponse.Content.ReadFromJsonAsync<GameResponse>();
             
             var connectionX = await CreateHubConnectionAsync(tokenX);
@@ -100,7 +100,7 @@ namespace TicTacToe.IntegrationTests.Api
             var tokenO = await RegisterAndLoginAsync("PlayerO");
 
             _client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokenX);
-            var createGameResponse = await _client.PostAsync("/api/game/create", null);
+            var createGameResponse = await _client.PostAsJsonAsync("/api/game/create", new CreateGameRequest(GameMode.PvpOnline));
             var game = await createGameResponse.Content.ReadFromJsonAsync<GameResponse>();
 
             var connectionO = await CreateHubConnectionAsync(tokenO);
@@ -123,7 +123,7 @@ namespace TicTacToe.IntegrationTests.Api
             var tokenO = await RegisterAndLoginAsync("PlayerO");
 
             _client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokenX);
-            var createGameResponse = await _client.PostAsync("/api/game/create", null);
+            var createGameResponse = await _client.PostAsJsonAsync("/api/game/create", new CreateGameRequest(GameMode.PvpOnline));
             var game = await createGameResponse.Content.ReadFromJsonAsync<GameResponse>();
 
             var connectionX = await CreateHubConnectionAsync(tokenX);
@@ -142,7 +142,7 @@ namespace TicTacToe.IntegrationTests.Api
             var savedGame = await getGameResponse.Content.ReadFromJsonAsync<GameResponse>();
 
             Assert.Equal(GameStatus.Finished, savedGame!.Status);
-            Assert.Equal(savedGame.PlayerX, savedGame.WinnerId);
+            Assert.Equal(savedGame.PlayerXId, savedGame.WinnerId);
         }
 
         [Fact]
@@ -152,7 +152,7 @@ namespace TicTacToe.IntegrationTests.Api
             var tokenO = await RegisterAndLoginAsync("PlayerO");
 
             _client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokenX);
-            var createGameResponse = await _client.PostAsync("/api/game/create", null);
+            var createGameResponse = await _client.PostAsJsonAsync("/api/game/create", new CreateGameRequest(GameMode.PvpOnline));
             var game = await createGameResponse.Content.ReadFromJsonAsync<GameResponse>();
 
             var connectionX = await CreateHubConnectionAsync(tokenX);
@@ -200,7 +200,7 @@ namespace TicTacToe.IntegrationTests.Api
             _client.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokenX);
 
-            var createResponse = await _client.PostAsync("/api/game/create", null);
+            var createResponse = await _client.PostAsJsonAsync("/api/game/create", new CreateGameRequest(GameMode.PvpOnline));
             var createdGame = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
 
             // Player O joins via SignalR hub
@@ -221,6 +221,87 @@ namespace TicTacToe.IntegrationTests.Api
             Assert.Equal(playerXName, gameInHistory.PlayerXName);
             Assert.Equal(playerOName, gameInHistory.PlayerOName);
             Assert.Equal(GameStatus.InProgress.ToString(), gameInHistory.Status);
+        }
+
+        [Fact]
+        public async Task GuestLogin_ShouldReturnToken_AndAllowCreatingGame()
+        {
+            // Act: request a guest token without prior registration
+            var guestResponse = await _client.PostAsync("/api/auth/guest", null);
+            guestResponse.EnsureSuccessStatusCode();
+
+            var auth = await guestResponse.Content.ReadFromJsonAsync<AuthResponse>();
+
+            // Assert: token is generated and username starts with Guest_
+            Assert.NotNull(auth);
+            Assert.False(string.IsNullOrEmpty(auth.Token));
+            Assert.StartsWith("Guest_", auth.Username);
+
+            // Verify the guest token grants access to protected endpoints
+            _client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", auth.Token);
+
+            var createResponse = await _client.PostAsJsonAsync("/api/game/create", new CreateGameRequest(GameMode.HotSeat));
+            createResponse.EnsureSuccessStatusCode();
+        }
+
+        [Fact]
+        public async Task CreateGame_HotSeat_ShouldStartImmediatelyWithoutWaiting()
+        {
+            // Arrange
+            var token = await RegisterAndLoginAsync("HotSeatHost");
+            _client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            // Act: create a HotSeat game
+            var createResponse = await _client.PostAsJsonAsync("/api/game/create", new CreateGameRequest(GameMode.HotSeat));
+            var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+
+            // Assert: game starts immediately with InProgress status and assigned PlayerOId
+            Assert.NotNull(game);
+            Assert.Equal(GameStatus.InProgress, game.Status);
+            Assert.NotNull(game.PlayerOId);
+        }
+
+        [Fact]
+        public async Task VsBot_PlayerMakesMove_BotShouldMakeResponseMoveViaSignalR()
+        {
+            // Arrange: login and create a game vs Bot
+            var token = await RegisterAndLoginAsync("BotChallenger");
+            _client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var createResponse = await _client.PostAsJsonAsync("/api/game/create",
+                new CreateGameRequest(GameMode.VsBot, BotDifficulty.Easy));
+            var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+
+            var connection = await CreateHubConnectionAsync(token);
+            await connection.InvokeAsync("WaitForGame", game!.Id);
+
+            // Track events: 1st update = human move, 2nd update = bot counter-move
+            var moveCount = 0;
+            var botMoveTcs = new TaskCompletionSource<GameResponse>();
+
+            connection.On<GameResponse>("GameUpdated", updatedGame =>
+            {
+                moveCount++;
+                if (moveCount == 2)
+                {
+                    botMoveTcs.TrySetResult(updatedGame);
+                }
+            });
+
+            // Act: Player X makes a move at cell 0
+            await connection.InvokeAsync("MakeMove", game.Id, 0);
+
+            // Wait up to 4 seconds for the bot counter-move event
+            var finalBoardState = await botMoveTcs.Task.WaitAsync(TimeSpan.FromSeconds(4));
+
+            // Assert: board must have 2 occupied cells (X and O), turn switches back to X
+            Assert.NotNull(finalBoardState);
+            Assert.Equal(CellState.X, finalBoardState.Board[0]);
+            Assert.Contains(finalBoardState.Board, cell => cell == CellState.O);
+            Assert.Equal(CellState.X, finalBoardState.CurrentTurn);
         }
     }
 }

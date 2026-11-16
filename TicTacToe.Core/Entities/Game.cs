@@ -5,6 +5,8 @@ namespace TicTacToe.Core.Entities
     public class Game
     {
         public Guid Id { get; set; } = Guid.NewGuid();
+        public GameMode Mode { get; set; } = GameMode.PvpOnline;
+        public BotDifficulty? BotDifficulty { get; set; }
         public Guid PlayerXId { get; set; }
         public Guid? PlayerOId { get; set; }
         public CellState[] Board { get; set; } = new CellState[9];

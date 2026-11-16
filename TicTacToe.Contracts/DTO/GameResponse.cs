@@ -1,13 +1,14 @@
-﻿namespace TicTacToe.Contracts.DTO
+﻿using TicTacToe.Contracts.Enums;
+
+namespace TicTacToe.Contracts.DTO
 {
     public record GameResponse(
-        Guid GameId,
-        string Board,
-        Guid CurrentPlayerId,
-        bool isFinished,
-        Guid? WinnerId,
-        string Message
-        )
-    {
-    }
+        Guid Id,
+        Guid PlayerXId,
+        Guid? PlayerOId,
+        CellState[] Board,
+        CellState CurrentTurn,
+        GameStatus Status,
+        Guid? WinnerId = null
+    );
 }

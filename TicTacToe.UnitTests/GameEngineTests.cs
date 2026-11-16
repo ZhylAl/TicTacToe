@@ -225,5 +225,66 @@ namespace TicTacToe.UnitTests
             Assert.Null(result.WinnerId);
             Assert.NotNull(game.FinishedAt);
         }
+
+        [Fact]
+        public void MakeMove_HotSeat_CreatorCanMakeMovesForBothXAndO()
+        {
+            // Arrange: game in HotSeat mode
+            var game = CreateTestGame();
+            game.Mode = GameMode.HotSeat;
+
+            // Act 1: Game creator (PlayerX) makes a move for X
+            var move1 = _engine.MakeMove(game, game.PlayerXId, 0);
+
+            // Assert 1: X is placed, turn switches to O
+            Assert.True(move1.IsSuccess);
+            Assert.Equal(CellState.X, game.Board[0]);
+            Assert.Equal(CellState.O, game.CurrentTurn);
+
+            // Act 2: The same creator (PlayerX) makes a move for O
+            var move2 = _engine.MakeMove(game, game.PlayerXId, 1);
+
+            // Assert 2: O is placed, turn switches back to X
+            Assert.True(move2.IsSuccess);
+            Assert.Equal(CellState.O, game.Board[1]);
+            Assert.Equal(CellState.X, game.CurrentTurn);
+        }
+
+        [Fact]
+        public void MakeMove_HotSeat_StrangerCannotMakeMove()
+        {
+            // Arrange
+            var game = CreateTestGame();
+            game.Mode = GameMode.HotSeat;
+            var strangerId = Guid.NewGuid();
+
+            // Act: an unauthorized third party attempts to make a move in HotSeat
+            var result = _engine.MakeMove(game, strangerId, 0);
+
+            // Assert: rejected
+            Assert.False(result.IsSuccess);
+            Assert.Contains("Only the game creator", result.ErrorMessage);
+        }
+
+        [Fact]
+        public void MakeMove_HotSeat_WhenOWins_WinnerShouldBePlayerOId()
+        {
+            // Arrange: board setup where O is about to complete a winning line
+            var game = CreateTestGame();
+            game.Mode = GameMode.HotSeat;
+            game.CurrentTurn = CellState.O;
+            game.Board[0] = CellState.O;
+            game.Board[1] = CellState.O;
+
+            // Act: game creator (PlayerX) places the winning move for O at cell 2
+            var result = _engine.MakeMove(game, game.PlayerXId, 2);
+
+            // Assert: winner must be PlayerOId, not PlayerXId
+            Assert.True(result.IsSuccess);
+            Assert.True(result.IsGameFinished);
+            Assert.Equal(GameStatus.Finished, game.Status);
+            Assert.Equal(game.PlayerOId, game.WinnerId);
+            Assert.Equal(game.PlayerOId, result.WinnerId);
+        }
     }
 }

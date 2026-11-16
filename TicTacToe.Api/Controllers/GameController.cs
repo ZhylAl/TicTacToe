@@ -1,11 +1,13 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using TicTacToe.Application.Interfaces;
+using TicTacToe.Contracts.DTO;
 
 namespace TicTacToe.Api.Controllers
 {
-    [Authorize]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     [ApiController]
     [Route("api/[controller]")]
     public class GameController : ControllerBase
@@ -17,12 +19,12 @@ namespace TicTacToe.Api.Controllers
         }
 
         [HttpPost("create")]
-        public async Task<IActionResult> Create(CancellationToken cancellationToken)
+        public async Task<IActionResult> Create([FromBody] CreateGameRequest request, CancellationToken cancellationToken)
         {
             var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var userId = Guid.Parse(userIdString!);
 
-            var gameResponse = await _gameService.CreateGameAsync(userId, cancellationToken);
+            var gameResponse = await _gameService.CreateGameAsync(userId, request, cancellationToken);
             return Ok(gameResponse);
         }
 
@@ -36,6 +38,13 @@ namespace TicTacToe.Api.Controllers
             }
 
             return Ok(gameResponse);
+        }
+
+        [HttpGet("history")]
+        public async Task<IActionResult> GetHistory(CancellationToken cancellationToken)
+        {
+            var history = await _gameService.GetRecentGamesAsync(10, cancellationToken);
+            return Ok(history);
         }
     }
 }

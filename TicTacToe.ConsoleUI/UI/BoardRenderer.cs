@@ -1,5 +1,5 @@
 ﻿using Spectre.Console;
-using TicTacToe.Core.Enums;
+using TicTacToe.Contracts.Enums;
 
 namespace TicTacToe.ConsoleUI.UI;
 

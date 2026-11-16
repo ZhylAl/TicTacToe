@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using TicTacToe.Application.DTOs;
+using TicTacToe.Contracts.DTO;
 using TicTacToe.Application.Interfaces;
 using TicTacToe.Core.Entities;          
 
@@ -51,6 +51,23 @@ namespace TicTacToe.Api.Controllers
 
            var token = _jwtProvider.GenerateToken(user);
            return Ok(new AuthResponse(token, user.UserName!));
+        }
+
+        [HttpPost("guest")]
+        public IActionResult GuestLogin()
+        {
+            var guestId = Guid.NewGuid();
+            var guestName = $"Guest_{Random.Shared.Next(1000, 9999)}";
+            
+            // just in ram, not in db
+            var guestUser = new User
+            {
+                Id = guestId,
+                UserName = guestName,
+                Email = $"{guestName.ToLower()}@guest.local"
+            };
+            var token = _jwtProvider.GenerateToken(guestUser);
+            return Ok(new AuthResponse(token, guestName));
         }
     }
 }

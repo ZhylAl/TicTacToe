@@ -43,12 +43,23 @@ namespace TicTacToe.ConsoleUI
 
             await AuthenticateUserAsync(apiClient);
 
-            await AnsiConsole.Status()
-                .Spinner(Spinner.Known.Dots)
-                .StartAsync("Connecting to game server...", async _ =>
-                {
-                    await hubClient.ConnectAsync(apiClient.Token!);
-                });
+            try
+            {
+                await AnsiConsole.Status()
+                    .Spinner(Spinner.Known.Dots)
+                    .StartAsync("Connecting to game server...", async _ =>
+                    {
+                        await hubClient.ConnectAsync(apiClient.Token!);
+                    });
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine("[bold red]❌ Failed to connect to game server (SignalR)![/]");
+                AnsiConsole.MarkupLine($"[grey]{Markup.Escape(ex.Message)}[/]");
+                AnsiConsole.MarkupLine("[yellow]Please ensure TicTacToe.Api is running and try again.[/]");
+                Console.ReadKey(true);
+                return;
+            }
 
             AnsiConsole.MarkupLine($"[green]✔ Connected as [bold yellow]{apiClient.CurrentUsername}[/]![/]\n");
             await Task.Delay(1000);

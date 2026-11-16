@@ -1,8 +1,9 @@
 ﻿using TicTacToe.Core.Enums;
 
-namespace TicTacToe.Core.Interfaces;
-
-public interface IBotPlayer
+namespace TicTacToe.Core.Interfaces
 {
-    int GetMove(CellState[] board, CellState botSymbol, BotDifficulty difficulty);
+    public interface IBotPlayer
+    {
+        int GetMove(CellState[] board, CellState botSymbol, BotDifficulty difficulty);
+    }
 }

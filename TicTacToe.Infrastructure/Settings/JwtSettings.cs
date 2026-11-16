@@ -7,6 +7,6 @@ namespace TicTacToe.Infrastructure.Settings
         public const string SectionName = "Jwt";
 
         [Required]
-        public string Key { get; set; }
+        public string Key { get; set; } = string.Empty; 
     }
 }

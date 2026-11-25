@@ -46,7 +46,6 @@ namespace TicTacToe.ConsoleUI.Services
             if (response.IsSuccessStatusCode)
                 return (true, null);
 
-            // Читаем реальный ответ об ошибке от Identity:
             var errorJson = await response.Content.ReadAsStringAsync();
             return (false, errorJson);
         }

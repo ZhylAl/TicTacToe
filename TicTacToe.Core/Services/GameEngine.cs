@@ -1,4 +1,6 @@
-﻿using TicTacToe.Core.Entities;
+﻿using System;
+using System.Linq;
+using TicTacToe.Core.Entities;
 using TicTacToe.Core.Enums;
 using TicTacToe.Core.Interfaces;
 using TicTacToe.Core.Models;
@@ -7,7 +9,7 @@ namespace TicTacToe.Core.Services
 {
     public class GameEngine : IGameEngine
     {
-        private static readonly int[][] winConditions = new int[][]
+        private static readonly int[][] WinConditions = new int[][]
         {
             new int[] { 0, 1, 2 },
             new int[] { 3, 4, 5 },
@@ -21,63 +23,92 @@ namespace TicTacToe.Core.Services
 
         public MoveResult MakeMove(Game game, Guid playerId, int position)
         {
-            // Validation
-            if (game.Status != GameStatus.InProgress || game.PlayerOId == null)
-                return MoveResult.Failure("Game is not in progress.");
-
-            if (position < 0 || position > 8)
-                return MoveResult.Failure("Invalid position. Must be between 0 and 8.");
-
-            if (game.Board[position] != CellState.Empty)
-                return MoveResult.Failure("Cell is already occupied.");
-
-            if (game.Mode == GameMode.HotSeat)
+            var validationError = ValidateMove(game, playerId, position);
+            if (validationError != null)
             {
-                // In HotSeat mode, only the game creator (PlayerX) can make moves
-                if (playerId != game.PlayerXId)
-                    return MoveResult.Failure("Only the game creator can make moves in HotSeat mode.");
-            }
-            else
-            {
-                // In normal online mode (PvP or vs Bot):
-                if (playerId != game.PlayerXId && playerId != game.PlayerOId)
-                    return MoveResult.Failure("Player is not part of this game.");
-                Guid currentPlayerId = game.CurrentTurn == CellState.X ? game.PlayerXId : game.PlayerOId.Value;
-                if (currentPlayerId != playerId)
-                    return MoveResult.Failure("It's not the player's turn.");
+                return MoveResult.Failure(validationError);
             }
 
-            // Make the move
+            // Apply move
             game.Board[position] = game.CurrentTurn;
             game.LastUpdatedAt = DateTime.UtcNow;
 
-            // Check for a win or draw
+            // Check game outcome
             if (CheckWin(game.Board, game.CurrentTurn))
             {
-                Guid winnerId = game.CurrentTurn == CellState.X ? game.PlayerXId : game.PlayerOId.Value;
-
-                game.WinnerId = winnerId;
-                game.FinishedAt = DateTime.UtcNow;
-                game.Status = GameStatus.Finished;
-                return MoveResult.Success(true, winnerId);
+                return CompleteGameWithWinner(game);
             }
-            
-            if (game.Board.All(cell => cell != CellState.Empty))
+
+            if (IsBoardFull(game.Board))
             {
-                game.FinishedAt = DateTime.UtcNow;
-                game.Status = GameStatus.Finished;
-                return MoveResult.Success(true);
+                return CompleteGameWithDraw(game);
             }
 
-            // Switch turns
-            game.CurrentTurn = game.CurrentTurn == CellState.X ? CellState.O : CellState.X;
-
+            SwitchTurn(game);
             return MoveResult.Success(false);
         }
 
-        private bool CheckWin(CellState[] board, CellState player)
+        private static string? ValidateMove(Game game, Guid playerId, int position)
         {
-            foreach (var condition in winConditions)
+            if (game.Status != GameStatus.InProgress || game.PlayerOId == null)
+                return "Game is not in progress.";
+
+            if (position < 0 || position > 8)
+                return "Invalid position. Must be between 0 and 8.";
+
+            if (game.Board[position] != CellState.Empty)
+                return "Cell is already occupied.";
+
+            if (game.Mode == GameMode.HotSeat)
+            {
+                if (playerId != game.PlayerXId)
+                    return "Only the game creator can make moves in HotSeat mode.";
+            }
+            else
+            {
+                if (playerId != game.PlayerXId && playerId != game.PlayerOId)
+                    return "Player is not part of this game.";
+
+                var currentPlayerId = game.CurrentTurn == CellState.X ? game.PlayerXId : game.PlayerOId.Value;
+                if (currentPlayerId != playerId)
+                    return "It's not the player's turn.";
+            }
+
+            return null;
+        }
+
+        private static MoveResult CompleteGameWithWinner(Game game)
+        {
+            var winnerId = game.CurrentTurn == CellState.X ? game.PlayerXId : game.PlayerOId!.Value;
+
+            game.WinnerId = winnerId;
+            game.FinishedAt = DateTime.UtcNow;
+            game.Status = GameStatus.Finished;
+
+            return MoveResult.Success(true, winnerId);
+        }
+
+        private static MoveResult CompleteGameWithDraw(Game game)
+        {
+            game.FinishedAt = DateTime.UtcNow;
+            game.Status = GameStatus.Finished;
+
+            return MoveResult.Success(true);
+        }
+
+        private static bool IsBoardFull(CellState[] board)
+        {
+            return board.All(cell => cell != CellState.Empty);
+        }
+
+        private static void SwitchTurn(Game game)
+        {
+            game.CurrentTurn = game.CurrentTurn == CellState.X ? CellState.O : CellState.X;
+        }
+
+        private static bool CheckWin(CellState[] board, CellState player)
+        {
+            foreach (var condition in WinConditions)
             {
                 if (board[condition[0]] == player &&
                     board[condition[1]] == player &&

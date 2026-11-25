@@ -1,4 +1,5 @@
-﻿using Scalar.AspNetCore;
+﻿using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 using TicTacToe.Api.Hubs;
 using TicTacToe.Application;
 using TicTacToe.Infrastructure;
@@ -55,6 +56,12 @@ namespace TicTacToe.Api
 
             app.MapControllers();
             app.MapHub<GameHub>("/gamehub");
+
+            using (var scope = app.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<TicTacToe.Infrastructure.Data.ApplicationDbContext>();
+                db.Database.Migrate();
+            }
 
             app.Run();
         }

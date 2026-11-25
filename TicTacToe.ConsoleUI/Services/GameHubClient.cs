@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using System;
 using System.Threading.Tasks;
+using TicTacToe.ConsoleUI.Settings;
 using TicTacToe.Contracts.DTO;
 
 namespace TicTacToe.ConsoleUI.Services
@@ -14,9 +16,9 @@ namespace TicTacToe.ConsoleUI.Services
         public event Action<GameResponse>? OnGameStarted;
         public event Action<GameResponse>? OnGameUpdated;
 
-        public GameHubClient(IConfiguration configuration)
+        public GameHubClient(IOptions<ApiSettings> options)
         {
-            var baseUrl = configuration["ApiSettings:BaseUrl"] ?? "http://localhost:5146";
+            var baseUrl = options.Value.BaseUrl;
             _hubUrl = $"{baseUrl.TrimEnd('/')}/gamehub";
         }
 

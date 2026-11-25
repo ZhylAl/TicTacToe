@@ -21,8 +21,13 @@ namespace TicTacToe.Api.Controllers
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] CreateGameRequest request, CancellationToken cancellationToken)
         {
-            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var userId = Guid.Parse(userIdString!);
+            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                            ?? User.FindFirstValue("sub");
+
+            if (!Guid.TryParse(userIdString, out var userId))
+            {
+                return Unauthorized("User identifier claim is missing or invalid.");
+            }
 
             var gameResponse = await _gameService.CreateGameAsync(userId, request, cancellationToken);
             return Ok(gameResponse);
